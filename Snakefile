@@ -2,7 +2,7 @@
 import os
 from os import path
 
-configfile: "config.yml"
+configfile: "/bigdisk/Nanopore/190104_pinfishPipeline/config.yml"
 workdir: path.join(config["workdir_top"], config["pipeline"])
 
 WORKDIR = path.join(config["workdir_top"], config["pipeline"])
@@ -24,10 +24,46 @@ rule build_minimap_index: ## build minimap2 index
         minimap2 -t {threads} {params.opts} -I 1000G -d {output.index} {input.genome}
     """
 
+rule raw_qc: # do qc of raw fastq
+    input:
+        fastq = config["reads_fastq"]
+    output:
+        txt = "QC/raw/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --fastq {input.fastq} -o QC/raw/
+        touch {output.txt}
+    """
+
+rule read_directionality:
+    input:
+        fastq = config["reads_fastq"]
+    output:
+        report = "pychopper/report.pdf",
+        unclassified = "pychopper/unclassified.fq",
+        classified = "pychopper/classified.fq"
+    shell:"""
+        /home/epicwl/miniconda3/bin/cdna_classifier.py -b /home/epicwl/pychopper/data/cdna_barcodes.fas -r {output.report} \
+        -u {output.unclassified} {input.fastq} {output.classified}
+    """
+
+rule pychopper_qc: # do qc of raw fastq
+    input:
+        fastq = "pychopper/classified.fq"
+    output:
+        txt = "QC/pychopper/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --fastq {input.fastq} -o QC/pychopper/
+        touch {output.txt}
+    """
+
 rule map_reads: ## map reads using minimap2
     input:
        index = rules.build_minimap_index.output.index,
-       fastq = config["reads_fastq"]
+       fastq = rules.read_directionality.output.classified
     output:
        bam = "alignments/reads_aln_sorted.bam"
     params:
@@ -39,6 +75,18 @@ rule map_reads: ## map reads using minimap2
     minimap2 -t {threads} -ax splice {params.opts} {input.index} {input.fastq}\
     | samtools view -q {params.min_mq} -F 2304 -Sb | samtools sort -@ {threads} - -o {output.bam};
     samtools index {output.bam}
+    """
+
+rule bam_qc: # do qc of raw fastq
+    input:
+        bam = rules.map_reads.output.bam
+    output:
+        txt = "QC/bam/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --bam {input.bam} -o QC/bam/
+        touch {output.txt}
     """
 
 rule convert_bam: ## convert BAM to GFF
@@ -157,7 +205,11 @@ rule gen_corr_trs: ## Generate corrected transcriptome.
 rule all: ## run the whole pipeline
     input:
         index = rules.build_minimap_index.output.index,
+        raw_qc = rules.raw_qc.output.txt,
+        directionality = rules.read_directionality.output.classified,
+        pychopper_qc = rules.pychopper_qc.output.txt,
         aligned_reads = rules.map_reads.output.bam,
+        bam_qc = rules.bam_qc.output.txt,
         raw_gff = rules.convert_bam.output.raw_gff,
         cls_gff = rules.cluster_gff.output.cls_gff,
         cls_gff_col = rules.collapse_clustered.output.cls_gff_col,
@@ -166,4 +218,3 @@ rule all: ## run the whole pipeline
         pol_gff = rules.convert_polished.output.pol_gff,
         pol_gff_col = rules.collapse_polished.output.pol_gff_col,
         corr_trs = rules.gen_corr_trs.output.fasta,
-
