@@ -44,7 +44,7 @@ rule read_directionality:
         unclassified = "pychopper/unclassified.fq",
         classified = "pychopper/classified.fq"
     shell:"""
-        /home/epicwl/miniconda3/bin/cdna_classifier.py -b /home/epicwl/pychopper/data/cdna_barcodes.fas -r {output.report} \
+        cdna_classifier.py -b /home/epicwl/pychopper/data/cdna_barcodes.fas -r {output.report} \
         -u {output.unclassified} {input.fastq} {output.classified}
     """
 
@@ -80,6 +80,7 @@ rule map_reads: ## map reads using minimap2
 rule bam_qc: # do qc of raw fastq
     input:
         bam = rules.map_reads.output.bam
+#        fastq = "alignments/reads_aln_sorted.bam"
     output:
         txt = "QC/bam/NanoStats.txt"
     conda: "env.yml"
@@ -202,6 +203,18 @@ rule gen_corr_trs: ## Generate corrected transcriptome.
     gffread -g {input.genome} -w {output.fasta} {input.gff}
     """
 
+rule compare_gff: ## compare gff with reference
+    input:
+        reference = config["reference_transcriptome"],
+        gff = rules.collapse_polished.output.pol_gff_col,
+    output:
+        stats = "results/compare/compare.stats"
+    conda: "env.yml"
+    shell:"""
+    gffcompare -R -r {input.reference} -o results/compare/compare {input.gff}
+    touch {output.stats}
+    """
+
 rule all: ## run the whole pipeline
     input:
         index = rules.build_minimap_index.output.index,
@@ -218,3 +231,4 @@ rule all: ## run the whole pipeline
         pol_gff = rules.convert_polished.output.pol_gff,
         pol_gff_col = rules.collapse_polished.output.pol_gff_col,
         corr_trs = rules.gen_corr_trs.output.fasta,
+        gff_compare = rules.compare_gff.ouput.stats,
