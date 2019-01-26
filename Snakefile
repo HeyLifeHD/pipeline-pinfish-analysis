@@ -38,13 +38,14 @@ rule raw_qc: # do qc of raw fastq
 
 rule read_directionality:
     input:
-        fastq = config["reads_fastq"]
+        fastq = config["reads_fastq"],
+        adapters = config["adapters_fastq"]
     output:
         report = "pychopper/report.pdf",
         unclassified = "pychopper/unclassified.fq",
         classified = "pychopper/classified.fq"
     shell:"""
-        cdna_classifier.py -b /home/epicwl/pychopper/data/cdna_barcodes.fas -r {output.report} \
+        cdna_classifier.py -b {input.adapters] -r {output.report} \
         -u {output.unclassified} {input.fastq} {output.classified}
     """
 
