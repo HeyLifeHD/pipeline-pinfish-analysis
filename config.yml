@@ -10,8 +10,10 @@ repo: "https://github.com/nanoporetech/pipeline-pinfish-analysis.git"
 
 ## Pipeline-specific parameters:
 
-threads: 50
+threads: 5
 
+# Pychopper adapter sequence input:
+adapters_fastq: "pychopper/data/cdna_barcodes.fas"
 # Input genome:
 genome_fasta: "Drosophila_melanogaster.BDGP6.dna_sm.toplevel.fa"
 
