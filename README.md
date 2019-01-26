@@ -13,7 +13,8 @@ Getting Started
 
 ## Input
 
-- The input reads must be in fastq format. The default parameters in `config.yml` are tuned for stranded data. If your input is unstranded cDNA data, it is recommended to run [pychopper](https://github.com/nanoporetech/pychopper) on the input fastq in order to detect the strandedness of the reads. It is recommended to run `pychopper` for stranded cDNA data as well to select for reads which have both the reverse transcription and the strand switching primer.
+- Update: Pychopper is done by default.
+#- The input reads must be in fastq format. The default parameters in `config.yml` are tuned for stranded data. If your input is unstranded cDNA data, it is recommended to run [pychopper](https://github.com/nanoporetech/pychopper) on the input fastq in order to detect the strandedness of the reads. It is recommended to run `pychopper` for stranded cDNA data as well to select for reads which have both the reverse transcription and the strand switching primer.
 
 - The input genome must be in fasta format.
 
@@ -39,6 +40,9 @@ The pipeline produces the following output:
 - [minimap2](https://github.com/lh3/minimap2) - installed by the pipeline via conda
 - [samtools](https://github.com/samtools/samtools) -  installed by the pipeline via conda
 - [racon](https://github.com/isovic/racon) - please install from source!
+- [nanopack](https://github.com/wdecoster/nanopack) -  installed by the pipeline via conda
+- [pychopper](https://github.com/nanoporetech/pychopper) -  installed by the pipeline via conda
+- [gffcompare](https://ccb.jhu.edu/software/stringtie/gffcompare.shtml) - easily installed via conda
 
 ## Layout
 
@@ -60,7 +64,7 @@ git clone --recursive https://github.com/nanoporetech/pipeline-pinfish-analysis.
 
 ## Usage
 
-Edit `config.yml` to set the input genome, input fastq and parameters, then issue:
+Edit `config.yml` to set the input genome, input fastq and parameters, then issue (additional configs haven't been specified for updated pipeline yet):
 
 ```bash
 snakemake --use-conda -j <num_cores> all
