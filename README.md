@@ -42,7 +42,8 @@ The pipeline produces the following output:
 - [racon](https://github.com/isovic/racon) - please install from source!
 - [nanopack](https://github.com/wdecoster/nanopack) -  installed by the pipeline via conda
 - [pychopper](https://github.com/nanoporetech/pychopper) -  installed by the pipeline via conda
-- [gffcompare](https://ccb.jhu.edu/software/stringtie/gffcompare.shtml) - easily installed via conda
+- [gffcompare](http://ccb.jhu.edu/software/stringtie/gff.shtml) - easily installed via conda
+- [gffread](http://ccb.jhu.edu/software/stringtie/gff.shtml) - easily installed via conda
 
 ## Layout
 
