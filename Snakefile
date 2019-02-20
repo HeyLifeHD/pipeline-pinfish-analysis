@@ -2,12 +2,13 @@
 import os
 from os import path
 
-#Directory of Snakefile for pinfish paths
-SNAKEDIR = path.dirname(workflow.snakefile)
-
 #Specify configfile
-configfile: path.join(SNAKEDIR, "config.yaml")
+SNAKEDIR = path.dirname(workflow.snakefile)
+configfile: path.join(SNAKEDIR, "config.yml")
 workdir: path.join(config["workdir_top"], config["pipeline"])
+
+#Directory of Snakefile for pinfish paths
+WORKDIR = path.join(config["workdir_top"], config["pipeline"])
 
 #Additional Rules
 include: "snakelib/utils.snake"
@@ -97,7 +98,7 @@ rule filter_qc: # do qc of raw fastq
 rule map_reads: ## map reads using minimap2
     input:
        index = "index/genome_index.mmi",
-       fastq = if config["pychopper_analysis"] "pychopper/classified.fq" else "filtered/filtered.fastq"
+       fastq = "pychopper/classified.fq" if config["pychopper_analysis"] else "filtered/filtered.fastq"
     output:
        bam = "alignments/reads_aln_sorted.bam"
     params:
@@ -253,7 +254,7 @@ rule all: ## run the whole pipeline
     input:
         index = rules.build_minimap_index.output.index,
         raw_qc = rules.raw_qc.output.txt,
-        if config["pychopper_analysis"] "QC/pychopper/NanoStats.txt" else "QC/filter/NanoStats.txt",
+        filter_qc = "QC/pychopper/NanoStats.txt" if config["pychopper_analysis"] else "QC/filter/NanoStats.txt",
         aligned_reads = rules.map_reads.output.bam,
         bam_qc = rules.bam_qc.output.txt,
         raw_gff = rules.convert_bam.output.raw_gff,
@@ -264,4 +265,4 @@ rule all: ## run the whole pipeline
         pol_gff = rules.convert_polished.output.pol_gff,
         pol_gff_col = rules.collapse_polished.output.pol_gff_col,
         corr_trs = rules.gen_corr_trs.output.fasta,
-        gff_compare = rules.compare_gff.ouput.stats,
+        gff_compare = rules.compare_gff.output.stats,

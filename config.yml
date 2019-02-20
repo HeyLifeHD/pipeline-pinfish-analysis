@@ -78,3 +78,6 @@ collapse_five_tol: 7500
 
 # Three prime boundary tolerance:
 collapse_three_tol: 30
+
+#define reference transcriptome for gffcompare
+reference_transcriptome: "/bigdisk/Nanopore/gencode.v29lift37.annoation.gtf"
