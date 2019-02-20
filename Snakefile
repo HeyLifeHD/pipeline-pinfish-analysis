@@ -32,7 +32,7 @@ rule raw_qc: # do qc of raw fastq
         fastq = config["reads_fastq"]
     output:
         txt = "QC/raw/NanoStats.txt"
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
         NanoPlot -t {threads} --fastq {input.fastq} -o QC/raw/
@@ -47,7 +47,7 @@ rule read_directionality:
         report = "pychopper/report.pdf",
         unclassified = "pychopper/unclassified.fq",
         classified = "pychopper/classified.fq"
-    conda: "env.yml"
+    #conda: "env.yml"
     shell:"""
         cdna_classifier.py -b {input.adapters} -r {output.report} \
         -u {output.unclassified} {input.fastq} {output.classified}
@@ -58,7 +58,7 @@ rule pychopper_qc: # do qc of raw fastq
         fastq = "pychopper/classified.fq"
     output:
         txt = "QC/pychopper/NanoStats.txt"
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
         NanoPlot -t {threads} --fastq {input.fastq} -o QC/pychopper/
@@ -76,7 +76,7 @@ rule filter_rawfastq:
         length = config["min_length"],
         head = config["headcrop"],
     threads: config["threads"]
-    conda: "env.yml"
+    #conda: "env.yml"
     shell:"""
         cat {input.fastq} \
         | NanoFilt -q {params.qual} -l {params.length} --headcrop {params.head} \
@@ -88,7 +88,7 @@ rule filter_qc: # do qc of raw fastq
         fastq = "filtered/filtered.fastq"
     output:
         txt = "QC/filter/NanoStats.txt"
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
         NanoPlot -t {threads} --fastq {input.fastq} -o QC/raw/
@@ -117,7 +117,7 @@ rule bam_qc: # do qc of raw fastq
         bam = "alignments/reads_aln_sorted.bam"
     output:
         txt = "QC/bam/NanoStats.txt"
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
         NanoPlot -t {threads} --bam {input.bam} -o QC/bam/
@@ -129,7 +129,7 @@ rule convert_bam: ## convert BAM to GFF
         bam = "alignments/reads_aln_sorted.bam"
     output:
         raw_gff = "results/raw_transcripts.gff"
-    conda: "env.yml"
+    #conda: "env.yml"
     params:
         opts = config["spliced_bam2gff_opts"]
     threads: config["threads"]
@@ -148,7 +148,7 @@ rule cluster_gff: ## cluster transcripts in GFF
         d = config["exon_boundary_tolerance"],
         e = config["terminal_exon_boundary_tolerance"],
         min_iso_frac = config["minimum_isoform_percent"],
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
     {SNAKEDIR}/pinfish/cluster_gff/cluster_gff -p {params.min_iso_frac} -t {threads} -c {params.c} -d {params.d} -e {params.e} -a {output.cls_tab} {input.raw_gff} > {output.cls_gff}
@@ -163,7 +163,7 @@ rule collapse_clustered: ## collapse clustered read artifacts
         d = config["collapse_internal_tol"],
         e = config["collapse_three_tol"],
         f = config["collapse_five_tol"],
-    conda: "env.yml"
+    #conda: "env.yml"
     shell:"""
     {SNAKEDIR}/pinfish/collapse_partials/collapse_partials -d {params.d} -e {params.e} -f {params.f} {input.cls_gff} > {output.cls_gff_col}
     """
@@ -177,7 +177,7 @@ rule polish_clusters: ## polish read clusters
         pol_trs = "results/polished_transcripts.fas",
     params:
         c = config["minimum_cluster_size"],
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
     {SNAKEDIR}/pinfish/polish_clusters/polish_clusters -t {threads} -a {input.cls_tab} -c {params.c} -o {output.pol_trs} {input.bam}
@@ -191,7 +191,7 @@ rule map_polished: ## map polished transcripts to genome
        pol_bam = "alignments/polished_reads_aln_sorted.bam"
     params:
         extra = config["minimap2_opts_polished"]
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
     minimap2 -t {threads} {params.extra} -ax splice {input.index} {input.fasta}\
@@ -206,7 +206,7 @@ rule convert_polished: ## convert BAM of polished transcripts to GFF
         pol_gff = "results/polished_transcripts.gff"
     params:
         extra = config["spliced_bam2gff_opts_pol"]
-    conda: "env.yml"
+    #conda: "env.yml"
     threads: config["threads"]
     shell:"""
     {SNAKEDIR}/pinfish/spliced_bam2gff/spliced_bam2gff {params.extra} -t {threads} -M {input.bam} > {output.pol_gff}
@@ -221,7 +221,7 @@ rule collapse_polished: ## collapse polished read artifacts
         d = config["collapse_internal_tol"],
         e = config["collapse_three_tol"],
         f = config["collapse_five_tol"]
-    conda: "env.yml"
+    #conda: "env.yml"
     shell:"""
     {SNAKEDIR}/pinfish/collapse_partials/collapse_partials -d {params.d} -e {params.e} -f {params.f} {input.pol_gff} > {output.pol_gff_col}
     """
@@ -232,7 +232,7 @@ rule gen_corr_trs: ## Generate corrected transcriptome.
         gff = "results/polished_transcripts_collapsed.gff"
     output:
         fasta = "results/corrected_transcriptome_polished_collapsed.fas"
-    conda: "env.yml"
+    #conda: "env.yml"
     shell:"""
     gffread -g {input.genome} -w {output.fasta} {input.gff}
     """
