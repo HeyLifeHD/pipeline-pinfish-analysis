@@ -49,7 +49,7 @@ rule read_directionality:
         classified = "pychopper/classified.fq"
     conda: "env.yml"
     shell:"""
-        cdna_classifier.py -b {input.adapters] -r {output.report} \
+        cdna_classifier.py -b {input.adapters} -r {output.report} \
         -u {output.unclassified} {input.fastq} {output.classified}
     """
 
