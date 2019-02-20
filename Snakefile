@@ -1,80 +1,267 @@
-## General pipeline parameters:
-# ABSOLUTE path to directory holding the working directory:
-workdir_top: "/bigdisk/Nanopore/"
 
-# Name of the pipeline:
-pipeline: "190220_pinfish_analysis"
+import os
+from os import path
 
-# Repository URL:
-repo: "https://github.com/HeyLifeHD/pipeline-pinfish-analysis.git"
+#Directory of Snakefile for pinfish paths
+SNAKEDIR = path.dirname(workflow.snakefile)
 
-## Pipeline-specific parameters:
-# Number of threads:
-threads: 5
+#Specify configfile
+configfile: path.join(SNAKEDIR, "config.yaml")
+workdir: path.join(config["workdir_top"], config["pipeline"])
 
-# Input genome:
-genome_fasta: "/home/epicwl/genomes/hg19/male.hg19.fa"
+#Additional Rules
+include: "snakelib/utils.snake"
 
-# CDNA or direct RNA reads in fastq format:
-reads_fastq: "/bigdisk/Nanopore/raw_data/DAC_SB939.fastq"
 
-# Decide if pychopper should be used and give path to adapter sequences
-pychopper_analysis: true
-adapters_fastq: "/home/epicwl/pychopper/data/cdna_barcodes.fas"
+rule build_minimap_index: ## build minimap2 index
+    input:
+        genome = config["genome_fasta"]
+    output:
+        index = "index/genome_index.mmi"
+    params:
+        opts = config["minimap_index_opts"]
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        minimap2 -t {threads} {params.opts} -I 1000G -d {output.index} {input.genome}
+    """
 
-#If no pychopper is used decide which phred score and length cut off should be used for fastq filtering. In addition specify hard headcrop if needed
-min_phred: "7"
-min_length: "500"
-headcrop: "75"
+rule raw_qc: # do qc of raw fastq
+    input:
+        fastq = config["reads_fastq"]
+    output:
+        txt = "QC/raw/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --fastq {input.fastq} -o QC/raw/
+        touch {output.txt}
+    """
 
-# Extra option passed to minimap2 when generating index:
-#kmer length:
-minimap_index_opts: "-k14"
+rule read_directionality:
+    input:
+        fastq = config["reads_fastq"],
+        adapters = config["adapters_fastq"]
+    output:
+        report = "pychopper/report.pdf",
+        unclassified = "pychopper/unclassified.fq",
+        classified = "pychopper/classified.fq"
+    conda: "env.yml"
+    shell:"""
+        cdna_classifier.py -b {input.adapters] -r {output.report} \
+        -u {output.unclassified} {input.fastq} {output.classified}
+    """
 
-## Extra options passed to minimap2 when mapping:
-# Enable this for stranded data (this is the case if pychopper was run):
-minimap2_opts: "-uf"
+rule pychopper_qc: # do qc of raw fastq
+    input:
+        fastq = "pychopper/classified.fq"
+    output:
+        txt = "QC/pychopper/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --fastq {input.fastq} -o QC/pychopper/
+        touch {output.txt}
+    """
 
-# Enable this for SIRV data:
-#minimap2_opts: "--splice-flank=no"
+rule filter_rawfastq:
+    input:
+        index = "index/genome_index.mmi",
+        fastq = config["reads_fastq"]
+    output:
+        fastq = "filtered/filtered.fastq"
+    params:
+        qual = config["min_phred"],
+        length = config["min_length"],
+        head = config["headcrop"],
+    threads: config["threads"]
+    conda: "env.yml"
+    shell:"""
+        cat {input.fastq} \
+        | NanoFilt -q {params.qual} -l {params.length} --headcrop {params.head} \
+        > {output.fastq}
+    """       
 
-# Minmum mapping quality:
-minimum_mapping_quality: 10
+rule filter_qc: # do qc of raw fastq
+    input:
+        fastq = "filtered/filtered.fastq"
+    output:
+        txt = "QC/filter/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --fastq {input.fastq} -o QC/raw/
+        touch {output.txt}
+    """
 
-# Options passed to spliced_bam2gff:
-# Enable this for stranded data (this is the case if pychopper was run):
-spliced_bam2gff_opts: "-s"
+rule map_reads: ## map reads using minimap2
+    input:
+       index = "index/genome_index.mmi",
+       fastq = if config["pychopper_analysis"] "pychopper/classified.fq" else "filtered/filtered.fastq"
+    output:
+       bam = "alignments/reads_aln_sorted.bam"
+    params:
+        opts = config["minimap2_opts"],
+        min_mq = config["minimum_mapping_quality"]
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        minimap2 -t {threads} -ax splice {params.opts} {input.index} {input.fastq}\
+        | samtools view -q {params.min_mq} -F 2304 -Sb | samtools sort -@ {threads} - -o {output.bam};
+        samtools index {output.bam}
+    """
 
-# -c parameter:
-minimum_cluster_size: 5
+rule bam_qc: # do qc of raw fastq
+    input:
+        bam = "alignments/reads_aln_sorted.bam"
+    output:
+        txt = "QC/bam/NanoStats.txt"
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+        NanoPlot -t {threads} --bam {input.bam} -o QC/bam/
+        touch {output.txt}
+    """
 
-# -p parameter:
-minimum_isoform_percent: 1.0
+rule convert_bam: ## convert BAM to GFF
+    input:
+        bam = "alignments/reads_aln_sorted.bam"
+    output:
+        raw_gff = "results/raw_transcripts.gff"
+    conda: "env.yml"
+    params:
+        opts = config["spliced_bam2gff_opts"]
+    threads: config["threads"]
+    shell:"""
+    {SNAKEDIR}/pinfish/spliced_bam2gff/spliced_bam2gff {params.opts} -t {threads} -M {input.bam} > {output.raw_gff}
+    """
 
-# -d parameter:
-exon_boundary_tolerance: 15
+rule cluster_gff: ## cluster transcripts in GFF
+    input:
+        raw_gff = "results/raw_transcripts.gff"
+    output:
+        cls_gff = "results/clustered_transcripts.gff",
+        cls_tab = "results/cluster_memberships.tsv",
+    params:
+        c = config["minimum_cluster_size"],
+        d = config["exon_boundary_tolerance"],
+        e = config["terminal_exon_boundary_tolerance"],
+        min_iso_frac = config["minimum_isoform_percent"],
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+    {SNAKEDIR}/pinfish/cluster_gff/cluster_gff -p {params.min_iso_frac} -t {threads} -c {params.c} -d {params.d} -e {params.e} -a {output.cls_tab} {input.raw_gff} > {output.cls_gff}
+    """
 
-# -e parameter:
-terminal_exon_boundary_tolerance: 45
+rule collapse_clustered: ## collapse clustered read artifacts
+    input:
+        cls_gff = "results/clustered_transcripts.gff"
+    output:
+        cls_gff_col = "results/clustered_transcripts_collapsed.gff"
+    params:
+        d = config["collapse_internal_tol"],
+        e = config["collapse_three_tol"],
+        f = config["collapse_five_tol"],
+    conda: "env.yml"
+    shell:"""
+    {SNAKEDIR}/pinfish/collapse_partials/collapse_partials -d {params.d} -e {params.e} -f {params.f} {input.cls_gff} > {output.cls_gff_col}
+    """
 
-# Extra options passed to minimap2 when mapping polished reads:
-# Enable this for stranded data (this is the case if pychopper was run):
-minimap2_opts_polished: "-uf"
-# Enable this for SIRV data:
-#minimap2_opts_polished: "--splice-flank=no"
+rule polish_clusters: ## polish read clusters
+    input:
+        cls_gff = "results/clustered_transcripts.gff",
+        cls_tab = "results/cluster_memberships.tsv",
+        bam = "alignments/reads_aln_sorted.bam"
+    output:
+        pol_trs = "results/polished_transcripts.fas",
+    params:
+        c = config["minimum_cluster_size"],
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+    {SNAKEDIR}/pinfish/polish_clusters/polish_clusters -t {threads} -a {input.cls_tab} -c {params.c} -o {output.pol_trs} {input.bam}
+    """
 
-# Options passed to spliced_bam2gff when converting alignments of polished reads:
-# Enable this for stranded data (this is the case if pychopper was run):
-spliced_bam2gff_opts_pol: "-s"
+rule map_polished: ## map polished transcripts to genome
+    input:
+       index = "index/genome_index.mmi",
+       fasta = "results/polished_transcripts.fas"
+    output:
+       pol_bam = "alignments/polished_reads_aln_sorted.bam"
+    params:
+        extra = config["minimap2_opts_polished"]
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+    minimap2 -t {threads} {params.extra} -ax splice {input.index} {input.fasta}\
+    | samtools view -Sb -F 2304 | samtools sort -@ {threads} - -o {output.pol_bam};
+    samtools index {output.pol_bam}
+    """
 
-# Options passed to collapse_partials when collapsing fragmentation artifacts
-# in clustered and polished transcripts.
+rule convert_polished: ## convert BAM of polished transcripts to GFF
+    input:
+        bam = "alignments/polished_reads_aln_sorted.bam"
+    output:
+        pol_gff = "results/polished_transcripts.gff"
+    params:
+        extra = config["spliced_bam2gff_opts_pol"]
+    conda: "env.yml"
+    threads: config["threads"]
+    shell:"""
+    {SNAKEDIR}/pinfish/spliced_bam2gff/spliced_bam2gff {params.extra} -t {threads} -M {input.bam} > {output.pol_gff}
+    """
 
-# Internal exon boundary tolerance:
-collapse_internal_tol: 7
+rule collapse_polished: ## collapse polished read artifacts
+    input:
+        pol_gff = "results/polished_transcripts.gff"
+    output:
+        pol_gff_col = "results/polished_transcripts_collapsed.gff"
+    params:
+        d = config["collapse_internal_tol"],
+        e = config["collapse_three_tol"],
+        f = config["collapse_five_tol"]
+    conda: "env.yml"
+    shell:"""
+    {SNAKEDIR}/pinfish/collapse_partials/collapse_partials -d {params.d} -e {params.e} -f {params.f} {input.pol_gff} > {output.pol_gff_col}
+    """
 
-# Five prime boundary tolerance:
-collapse_five_tol: 7500
+rule gen_corr_trs: ## Generate corrected transcriptome.
+    input:
+        genome = config["genome_fasta"],
+        gff = "results/polished_transcripts_collapsed.gff"
+    output:
+        fasta = "results/corrected_transcriptome_polished_collapsed.fas"
+    conda: "env.yml"
+    shell:"""
+    gffread -g {input.genome} -w {output.fasta} {input.gff}
+    """
 
-# Three prime boundary tolerance:
-collapse_three_tol: 30
+rule compare_gff: ## compare gff with reference
+    input:
+        reference = config["reference_transcriptome"],
+        gff = "results/polished_transcripts_collapsed.gff"
+    output:
+        stats = "results/compare/compare.stats"
+    conda: "env.yml"
+    shell:"""
+    gffread {input.reference} -T results/polished_transcripts_collapsed.gtf
+    gffcompare -R -r results/polished_transcripts_collapsed.gtf -o results/compare/compare {input.gff}
+    touch {output.stats}
+    """
+
+rule all: ## run the whole pipeline
+    input:
+        index = rules.build_minimap_index.output.index,
+        raw_qc = rules.raw_qc.output.txt,
+        if config["pychopper_analysis"] "QC/pychopper/NanoStats.txt" else "QC/filter/NanoStats.txt",
+        aligned_reads = rules.map_reads.output.bam,
+        bam_qc = rules.bam_qc.output.txt,
+        raw_gff = rules.convert_bam.output.raw_gff,
+        cls_gff = rules.cluster_gff.output.cls_gff,
+        cls_gff_col = rules.collapse_clustered.output.cls_gff_col,
+        pol_trs = rules.polish_clusters.output.pol_trs,
+        pol_bam = rules.map_polished.output.pol_bam,
+        pol_gff = rules.convert_polished.output.pol_gff,
+        pol_gff_col = rules.collapse_polished.output.pol_gff_col,
+        corr_trs = rules.gen_corr_trs.output.fasta,
+        gff_compare = rules.compare_gff.ouput.stats,
