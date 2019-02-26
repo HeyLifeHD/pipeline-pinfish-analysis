@@ -245,8 +245,8 @@ rule compare_gff: ## compare gff with reference
         stats = "results/compare/compare.stats"
     conda: "env.yml"
     shell:"""
-    gffread {input.reference} -T results/polished_transcripts_collapsed.gtf
-    gffcompare -R -r results/polished_transcripts_collapsed.gtf -o results/compare/compare {input.gff}
+    gffread {input.gff} -T results/polished_transcripts_collapsed.gtf
+    gffcompare -R -r results/polished_transcripts_collapsed.gtf -o results/compare/compare {input.reference}
     touch {output.stats}
     """
 
