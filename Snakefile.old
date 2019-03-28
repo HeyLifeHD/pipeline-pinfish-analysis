@@ -44,6 +44,7 @@ rule read_directionality:
         report = "pychopper/report.pdf",
         unclassified = "pychopper/unclassified.fq",
         classified = "pychopper/classified.fq"
+    conda: "env.yml"
     shell:"""
         cdna_classifier.py -b {input.adapters] -r {output.report} \
         -u {output.unclassified} {input.fastq} {output.classified}
